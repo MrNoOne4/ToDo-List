@@ -34,7 +34,19 @@ class MyApp extends StatelessWidget {
           foregroundColor: Colors.white, // Text/icon color on the app bar
           elevation: 0, // No shadow under the app bar
           centerTitle: true, // Keep the title text centered
-        )
+        ),
+        // Custom text styles used across the app (this is what satisfies
+        // the "custom fonts / text styles" part of theming).
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF6A1B9A),
+          ),
+          bodyMedium: TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
       ),
 
 
@@ -43,10 +55,19 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// This turns a TimeOfDay into readable text like "6:00 AM"
+// without needing a BuildContext (safe to call from initState).
+String formatTime(TimeOfDay t) {
+  final hour = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod; // Convert to 12-hour format
+  final minute = t.minute.toString().padLeft(2, '0'); // Always show 2 digits (ex: "05")
+  final period = t.period == DayPeriod.am ? 'AM' : 'PM'; // Figure out AM or PM
+  return '$hour:$minute $period';
+}
+
 // ============================================================
 // Task
 // This is the "blueprint" for one task. It stores the
-// title, description, date, time, category, priority,
+// title, description, date, time, category,
 // and whether it is done or not.
 // ============================================================
 
@@ -56,6 +77,7 @@ class Task {
   String description; // Extra details for the task (can be empty)
   DateTime date; // Date the task is scheduled for
   TimeOfDay time; // Time the task is scheduled for
+  String category; // Category/label for the task
   bool isCompleted; // True if the task has been finished
 
   // Constructor - this is how a new Task object gets created
@@ -64,6 +86,7 @@ class Task {
     this.description = '',
     required this.date,
     required this.time,
+    this.category = '',
     this.isCompleted = false
 
   });
@@ -73,12 +96,7 @@ class Task {
 
   String get formattedDateTime  {
     final month = monthName(date.month); // Get the short month name (ex: "Aug")
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod; // Convert to 12-hour format
-    final minute = time.minute.toString().padLeft(2, '0'); // Always show 2 digits (ex: "05")
-    final period = time.period == DayPeriod.am? 'AM' : 'PM'; // Figure out AM or PM
-    
-    // Returning the value of the formattedDateTime
-    return '$hour:$minute $period • $month ${date.day}, ${date.year}';
+    return '${formatTime(time)} • $month ${date.day}, ${date.year}';
   }
 
    // This just converts a month number (1-12) into its short name.
@@ -113,19 +131,22 @@ class ToDoListScreenState extends State<ToDoListScreen> {
     Task(
       title: 'Wuwa Time',
       date: DateTime(2026, 8, 26),
-      time: const TimeOfDay(hour: 20, minute: 0)
+      time: const TimeOfDay(hour: 20, minute: 0),
+      category: 'Fun',
     ),
 
     Task(
       title: 'Night Walk with Self',
       date: DateTime(2026, 8, 30),
-      time: const TimeOfDay(hour: 23, minute: 0)
+      time: const TimeOfDay(hour: 23, minute: 0),
+      category: 'Health',
     ),
 
     Task(
       title: 'Assessment Project',
       date: DateTime(2026, 9, 2),
-      time: const TimeOfDay(hour: 7, minute: 30)
+      time: const TimeOfDay(hour: 7, minute: 30),
+      category: 'School',
     ),
 
     Task(
@@ -133,6 +154,7 @@ class ToDoListScreenState extends State<ToDoListScreen> {
       description: 'Review widgets, state management, and UI layout.',
       date: DateTime(2026, 9, 3),
       time: const TimeOfDay(hour: 6, minute: 0),
+      category: 'School',
       isCompleted: true,
     ),
   ];
@@ -144,6 +166,16 @@ class ToDoListScreenState extends State<ToDoListScreen> {
     setState((){
       task.isCompleted = !task.isCompleted; // Flip the status (done <-> not done)
     });
+    // Short confirmation so the user knows the tap/double-tap actually
+    // did something, instead of the checkbox just silently changing.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(task.isCompleted
+            ? 'Marked "${task.title}" as done!'
+            : 'Marked "${task.title}" as not done'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
   
   // Delete function for a task
@@ -151,6 +183,13 @@ class ToDoListScreenState extends State<ToDoListScreen> {
     setState((){
       tasks.remove(task); // Remove the task from the list
     });
+    // Confirmation for the long-press-to-delete gesture.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Deleted "${task.title}"'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   // Task Detail popup function for one task
@@ -185,6 +224,13 @@ class ToDoListScreenState extends State<ToDoListScreen> {
       setState(() {
         tasks.add(newTask); // Add the new task to the list
       });
+      // Confirmation that the form submission actually created a task.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${newTask.title}" added!'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -215,7 +261,7 @@ class ToDoListScreenState extends State<ToDoListScreen> {
             // ResizeImage controls the size of ONE tile before it repeats.
             // (DecorationImage itself has no width/height property.)
             image: ResizeImage(
-              AssetImage('assets/BORDER.jpg'),
+              AssetImage('assets/images/border_strip.jpg'),
               width: 124, // Width of ONE tile (keeps the pixel-art crisp)
               height: 30, // Height of ONE tile
             ),
@@ -316,46 +362,76 @@ class ToDoListScreenState extends State<ToDoListScreen> {
                   onDoubleTap: () => toggleCompleted(task), // Double tap -> mark done/not done
                   onLongPress: () => deleteTask(task), // Press and hold -> delete it
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 12), // Space below each row
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      // Filled pink if done, white if not done yet.
-                      color: task.isCompleted
-                          ? const Color(0xFFF3C6D8)
-                          : Colors.white,
-                      border: Border.all(color: const Color(0xFF6A1B9A)), // Purple border
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
+                    margin: const EdgeInsets.only(bottom: 16, top: 6), // Space around each row
+                    // Stack lets us float the little category badge on top
+                    // of the corner of the card, instead of squeezing it
+                    // into the Row layout below.
+                    child: Stack(
+                      clipBehavior: Clip.none, // Let the badge stick out past the edge
                       children: [
-                        // Checkbox also toggles done/not done.
-                        Checkbox(
-                          value: task.isCompleted,
-                          activeColor: const Color(0xFF6A1B9A),
-                          onChanged: (_) => toggleCompleted(task), // Tap to toggle status
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            // Filled pink if done, white if not done yet.
+                            color: task.isCompleted
+                                ? const Color(0xFFF3C6D8)
+                                : Colors.white,
+                            border: Border.all(color: const Color(0xFF6A1B9A)), // Purple border
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                task.title, // Task title
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
+                              // Checkbox also toggles done/not done.
+                              Checkbox(
+                                value: task.isCompleted,
+                                activeColor: const Color(0xFF6A1B9A),
+                                onChanged: (_) => toggleCompleted(task), // Tap to toggle status
                               ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.access_time,
-                                      size: 14, color: Color(0xFF6A1B9A)),
-                                  const SizedBox(width: 4),
-                                  Text(task.formattedDateTime, // Task date and time
-                                      style: const TextStyle(fontSize: 12)),
-                                ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      task.title, // Task title
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.access_time,
+                                            size: 14, color: Color(0xFF6A1B9A)),
+                                        const SizedBox(width: 4),
+                                        Text(task.formattedDateTime, // Task date and time
+                                            style: const TextStyle(fontSize: 12)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
                         ),
+                        // The small category badge, only shown if a
+                        // category was actually typed in.
+                        if (task.category.isNotEmpty)
+                          Positioned(
+                            top: -6,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6A1B9A),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                task.category,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 10),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -395,9 +471,11 @@ class PopupShell extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), // Rounded corners
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24), // Space from screen edges
       child: ConstrainedBox(
+        // MediaQuery makes this popup responsive: it will never be
+        // taller than 85% of whatever screen it's shown on.
         constraints: BoxConstraints(
           maxWidth: maxWidth,
-          maxHeight: MediaQuery.of(context).size.height * 0.85, // Never taller than 85% of the screen
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 12, 20),
@@ -447,6 +525,10 @@ class PopupShell extends StatelessWidget {
 //  1. Adding a brand new task (existingTask is left empty/null)
 //  2. Editing a task that already exists (existingTask is
 //     passed in, so the form starts already filled in)
+//
+// The Form below has 5 TextFormFields: Title, Description,
+// Category, Date, and Time — each one checked by a validator
+// before the task can be saved.
 // ============================================================
 class AddTaskDialog extends StatefulWidget {
   // If this is null, we are ADDING a new task.
@@ -463,6 +545,9 @@ class AddTaskDialogState extends State<AddTaskDialog> {
   final formKey = GlobalKey<FormState>(); // Key used to validate the form
   final titleController = TextEditingController(); // Controller for the title field
   final descriptionController = TextEditingController(); // Controller for the description field
+  final categoryController = TextEditingController(); // Controller for the category field
+  final dateController = TextEditingController(); // Controller that just DISPLAYS the picked date as text
+  final timeController = TextEditingController(); // Controller that just DISPLAYS the picked time as text
  
   DateTime selectedDate = DateTime.now(); // Currently selected date
   TimeOfDay selectedTime = TimeOfDay.now(); // Currently selected time
@@ -481,9 +566,14 @@ class AddTaskDialogState extends State<AddTaskDialog> {
       final task = widget.existingTask!;
       titleController.text = task.title; // Fill in the title field
       descriptionController.text = task.description; // Fill in the description field
+      categoryController.text = task.category; // Fill in the category field
       selectedDate = task.date; // Use the task's existing date
       selectedTime = task.time; // Use the task's existing time
     }
+    // Show the starting date/time as text in their own fields.
+    dateController.text =
+        '${selectedDate.month}/${selectedDate.day}/${selectedDate.year}';
+    timeController.text = formatTime(selectedTime);
   }
  
   @override
@@ -492,6 +582,9 @@ class AddTaskDialogState extends State<AddTaskDialog> {
     // (this avoids memory leaks)
     titleController.dispose();
     descriptionController.dispose();
+    categoryController.dispose();
+    dateController.dispose();
+    timeController.dispose();
     super.dispose();
   }
  
@@ -506,6 +599,8 @@ class AddTaskDialogState extends State<AddTaskDialog> {
     if (picked != null) {
       setState(() {
         selectedDate = picked; // Update the selected date
+        dateController.text =
+            '${picked.month}/${picked.day}/${picked.year}'; // Show it in the text field
       });
     }
   }
@@ -519,6 +614,7 @@ class AddTaskDialogState extends State<AddTaskDialog> {
     if (picked != null) {
       setState(() {
         selectedTime = picked; // Update the selected time
+        timeController.text = formatTime(picked); // Show it in the text field
       });
     }
   }
@@ -538,6 +634,7 @@ class AddTaskDialogState extends State<AddTaskDialog> {
       final task = widget.existingTask!;
       task.title = titleController.text;
       task.description = descriptionController.text;
+      task.category = categoryController.text;
       task.date = selectedDate;
       task.time = selectedTime;
  
@@ -549,6 +646,7 @@ class AddTaskDialogState extends State<AddTaskDialog> {
       final newTask = Task(
         title: titleController.text,
         description: descriptionController.text,
+        category: categoryController.text,
         date: selectedDate,
         time: selectedTime,
       );
@@ -565,7 +663,7 @@ class AddTaskDialogState extends State<AddTaskDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Title field ---
+            // --- 1) Title field (required) ---
             const Text('Title', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             TextFormField(
@@ -583,7 +681,7 @@ class AddTaskDialogState extends State<AddTaskDialog> {
             ),
             const SizedBox(height: 16),
  
-            // --- Description field ---
+            // --- 2) Description field (optional, no validator needed) ---
             const Text('Description',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
@@ -597,40 +695,62 @@ class AddTaskDialogState extends State<AddTaskDialog> {
             ),
             const SizedBox(height: 16),
  
-            // --- Date field (tap to open calendar) ---
-            const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
+            // --- 3) Category field (required) ---
+            const Text('Category',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
-            InkWell(
-              onTap: pickDate, // Tap to open the date picker
-              child: InputDecorator(
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                        '${selectedDate.month}/${selectedDate.day}/${selectedDate.year}'), // Show the selected date
-                    const Icon(Icons.calendar_today, size: 18),
-                  ],
-                ),
+            TextFormField(
+              controller: categoryController,
+              decoration: const InputDecoration(
+                hintText: 'e.g. School, Health, Fun',
+                border: OutlineInputBorder(),
               ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter a category'; // Error message if category is empty
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
  
-            // --- Time field (tap to open clock) ---
+            // --- 4) Date field (required, tap to open calendar) ---
+            const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: dateController,
+              readOnly: true, // User can't type here, only pick from the calendar
+              onTap: pickDate, // Tap the field to open the date picker
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.calendar_today, size: 18),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select a date';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+ 
+            // --- 5) Time field (required, tap to open clock) ---
             const Text('Time', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
-            InkWell(
-              onTap: pickTime, // Tap to open the time picker
-              child: InputDecorator(
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(selectedTime.format(context)), // Show the selected time
-                    const Icon(Icons.access_time, size: 18),
-                  ],
-                ),
+            TextFormField(
+              controller: timeController,
+              readOnly: true, // User can't type here, only pick from the clock
+              onTap: pickTime, // Tap the field to open the time picker
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.access_time, size: 18),
               ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select a time';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 20),
  
@@ -675,11 +795,22 @@ class TaskDetailsDialogState extends State<TaskDetailsDialog> {
   // of this details popup. After it closes, we refresh this popup
   // so any new title, date, etc. show up right away.
   Future<void> editTask() async {
-    await showDialog<Task>(
+    final updated = await showDialog<Task>(
       context: context,
       builder: (context) => AddTaskDialog(existingTask: widget.task),
     );
     setState(() {}); // Redraw this popup with the updated task info
+
+    // Confirmation that the edit form submission actually saved.
+    // (updated is null if the user closed the edit popup with X instead.)
+    if (updated != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${updated.title}" updated!'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
  
   @override
@@ -691,86 +822,107 @@ class TaskDetailsDialogState extends State<TaskDetailsDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // --- Card with the task's title, date/time, description ---
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF6A1B9A)),
+          // --- Card with the task's title, date/time, category, description ---
+          // Using the Card widget here (instead of a plain Container)
+          // still gets us the purple border look via its shape.
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              side: const BorderSide(color: Color(0xFF6A1B9A)),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      task.isCompleted
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank, // Change icon based on status
-                      color: const Color(0xFF6A1B9A),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(task.title, // Task title
-                          style:
-                              const TextStyle(fontWeight: FontWeight.bold)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        task.isCompleted
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank, // Change icon based on status
+                        color: const Color(0xFF6A1B9A),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(task.title, // Task title
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today,
+                          size: 16, color: Color(0xFF6A1B9A)),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(task.formattedDateTime)), // Date and time
+                    ],
+                  ),
+                  if (task.category.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.label_outline,
+                            size: 16, color: Color(0xFF6A1B9A)),
+                        const SizedBox(width: 6),
+                        Text(task.category), // Category
+                      ],
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        size: 16, color: Color(0xFF6A1B9A)),
-                    const SizedBox(width: 6),
-                    Expanded(child: Text(task.formattedDateTime)), // Date and time
-                  ],
-                ),
-                const Divider(height: 24),
-                Text(task.description.isEmpty
-                    ? 'No description added.' // Fallback text if there's no description
-                    : task.description),
-              ],
+                  const Divider(height: 24),
+                  Text(task.description.isEmpty
+                      ? 'No description added.' // Fallback text if there's no description
+                      : task.description),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
  
           // --- Card with the 3 action buttons ---
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF6A1B9A)),
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              side: const BorderSide(color: Color(0xFF6A1B9A)),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              children: [
-                // Tapping this closes this popup and sends 'toggle'
-                // back to the list screen, which flips the task
-                // between done/not done.
-                actionRow(
-                  icon: Icons.check_circle_outline,
-                  label: 'Mark as Completed',
-                  onTap: () => Navigator.pop(context, 'toggle'),
-                ),
-                const Divider(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  // Tapping this closes this popup and sends 'toggle'
+                  // back to the list screen, which flips the task
+                  // between done/not done.
+                  actionRow(
+                    icon: Icons.check_circle_outline,
+                    label: 'Mark as Completed',
+                    onTap: () => Navigator.pop(context, 'toggle'),
+                  ),
+                  const Divider(),
  
-                // Tapping this opens the edit popup for this task.
-                actionRow(
-                  icon: Icons.edit,
-                  label: 'Edit Task',
-                  onTap: editTask,
-                ),
-                const Divider(),
+                  // Tapping this opens the edit popup for this task.
+                  actionRow(
+                    icon: Icons.edit,
+                    label: 'Edit Task',
+                    onTap: editTask,
+                  ),
+                  const Divider(),
  
-                // Tapping this closes this popup and sends 'delete'
-                // back to the list screen, which removes this task.
-                actionRow(
-                  icon: Icons.delete,
-                  label: 'Delete Task',
-                  color: Colors.red,
-                  onTap: () => Navigator.pop(context, 'delete'),
-                ),
-              ],
+                  // Tapping this closes this popup and sends 'delete'
+                  // back to the list screen, which removes this task.
+                  actionRow(
+                    icon: Icons.delete,
+                    label: 'Delete Task',
+                    color: Colors.red,
+                    onTap: () => Navigator.pop(context, 'delete'),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
